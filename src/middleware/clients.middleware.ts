@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { getClientById } from "../models/clients.model.js";
 import { validator } from "../utils/validator/validator.utils.js";
 import type { ValidatorSchema } from "../types/validator.types.js";
 
@@ -33,7 +34,7 @@ export function clientRoutesValidator(
 ) {
   const { clientid } = req.params;
   const { path, targeturl } = req.body;
-  const validtorSchemas: ValidatorSchema<any>[] = [
+  const validtorSchemas: ValidatorSchema<string>[] = [
     {
       value: clientid,
       valueType: "string",
@@ -60,5 +61,40 @@ export function clientRoutesValidator(
     });
   }
 
+  next();
+}
+
+export async function clientRouteAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  const apiKey = req.get("x-api-key")?.trim();
+  const { clientid } = req.params;
+
+  if (!apiKey) {
+    return res.status(401).json({
+      success: false,
+      message: "The x-api-key header is required to create routes.",
+    });
+  }
+
+  const client = await getClientById(clientid as string);
+
+  if (!client) {
+    return res.status(404).json({
+      success: false,
+      message: "client id does not exists",
+    });
+  }
+
+  if (client.apiKey !== apiKey) {
+    return res.status(401).json({
+      success: false,
+      message: "The API key does not belong to this client.",
+    });
+  }
+
+  res.locals.client = client;
   next();
 }

@@ -3,7 +3,7 @@ import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import { ClientRequest, IncomingMessage, ServerResponse } from "http";
 import { insertProxyLog } from "../models/proxy-log.model.js";
 import type { Socket } from "net";
-import type { ProxyRequest, ProxyLog } from "../types/proxy.types.js";
+import type { ProxyRequest } from "../types/proxy.types.js";
 import { extractCompany, rejectRequest } from "../utils/proxy/proxy.utils.js";
 
 const dynamicProxySubdomain = proxyMiddlewareFactory();
@@ -96,11 +96,7 @@ function handleProxyError(
   }
 }
 
-function handleProxyResponse(
-  proxyRes: IncomingMessage,
-  req: IncomingMessage,
-  res: ServerResponse<IncomingMessage>,
-) {
+function handleProxyResponse(proxyRes: IncomingMessage, req: IncomingMessage) {
   const customeProxyRes = proxyRes as unknown as IncomingMessage & {
     req?: ClientRequest;
   };

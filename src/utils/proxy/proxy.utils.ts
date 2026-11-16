@@ -1,4 +1,4 @@
-import { ClientRequest, IncomingMessage, ServerResponse } from "http";
+import { IncomingMessage, ServerResponse } from "http";
 import type { ProxyLog, ProxyRequest } from "../../types/proxy.types.js";
 import { insertProxyLog } from "../../models/proxy-log.model.js";
 
@@ -51,7 +51,7 @@ export function normalizeRoute(
 }
 
 export function extractCompany(req: ProxyRequest) {
-  let { companyname } = req.params;
+  const { companyname } = req.params;
 
   if (companyname && !Array.isArray(companyname)) {
     return companyname;

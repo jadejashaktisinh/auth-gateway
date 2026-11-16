@@ -1,11 +1,16 @@
 import { type Request, type Response } from "express";
 
 import { db } from "../db/db.js";
-import { client_routes, clients } from "../db/schema/schema.js";
-import { eq } from "drizzle-orm/mysql-core/expressions";
-import { validateParam, generateApiKey } from "../utils/utils.js";
-import { getClientById } from "../models/clients.model.js";
+import { clients } from "../db/schema/schema.js";
+import { generateApiKey } from "../utils/utils.js";
 import { insertClientRoute } from "../models/client-routes.model.js";
+import { validateTargetUrl } from "../utils/security/target-url.js";
+
+type AuthenticatedClient = {
+  id: string;
+  companyName: string;
+  apiKey: string;
+};
 
 export async function handleClientRegistration(req: Request, res: Response) {
   const { companyName } = req.body;
@@ -33,24 +38,31 @@ export async function handleClientRegistration(req: Request, res: Response) {
 }
 
 export async function handleClientRouteCreation(req: Request, res: Response) {
-  const { clientid } = req.params;
   const { path, targeturl } = req.body;
+  const client = res.locals.client as AuthenticatedClient | undefined;
 
-  const client = await getClientById(clientid as string);
-  const isExists = !!client;
-
-  if (!isExists) {
-    res.status(400).json({
+  if (!client) {
+    res.status(401).json({
       success: false,
-      message: "client id does not exists",
+      message: "The API key does not belong to this client.",
     });
     return;
   }
 
-  const client_route = insertClientRoute({
-    client_id: client?.id ?? "",
+  const target = await validateTargetUrl(targeturl);
+
+  if (!target.ok) {
+    res.status(400).json({
+      success: false,
+      message: target.message,
+    });
+    return;
+  }
+
+  const client_route = await insertClientRoute({
+    client_id: client.id,
     client_path: path,
-    target_url: targeturl,
+    target_url: target.url,
   });
 
   if (!client_route) {

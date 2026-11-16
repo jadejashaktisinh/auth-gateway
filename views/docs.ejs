@@ -1,0 +1,266 @@
+<%- include("partials/header") %>
+
+<section class="page-heading">
+  <p class="eyebrow">API reference</p>
+  <h1>Endpoints, status codes, and limits.</h1>
+  <p class="lede">
+    The service exposes a small client API for registration and route setup, a
+    token endpoint, and two proxy entry points. The live demo is restricted to
+    path-prefix routing.
+  </p>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Endpoints</p>
+    <h2>Public API surface</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Auth</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td><code>/health</code></td>
+          <td>None</td>
+          <td>Liveness check for the web service.</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/client/register</code></td>
+          <td>None</td>
+          <td>Register a client and receive an API key.</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/client/:clientid/routes</code></td>
+          <td><code>x-api-key</code></td>
+          <td>Create a path-to-upstream route for that client.</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td><code>/oauth/token</code></td>
+          <td><code>x-api-key</code></td>
+          <td>Exchange an API key for a 15-minute JWT.</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td><code>/p/:companyname/*route</code></td>
+          <td><code>Bearer</code></td>
+          <td>Path-prefix proxy mode.</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td><code>*.&lt;DOMAIN&gt;/*route</code></td>
+          <td><code>Bearer</code></td>
+          <td>Subdomain proxy mode when wildcard DNS is available.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Register</p>
+    <h2>Create a client</h2>
+    <p>Registration is open but rate-limited per IP address.</p>
+  </div>
+  <pre class="code"><code>curl -X POST http://localhost:3000/client/register \
+  -H "Content-Type: application/json" \
+  -d '{"companyName":"acme"}'</code></pre>
+  <p class="response-label">Response</p>
+  <pre class="code"><code>{
+  "success": true,
+  "message": "Registration Successfull",
+  "client": [
+    {
+      "id": "uuid",
+      "companyName": "acme",
+      "apiKey": "auth_sec_..."
+    }
+  ]
+}</code></pre>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Routes</p>
+    <h2>Map a path to an upstream</h2>
+    <p>
+      Route creation requires the API key that belongs to the client. The
+      public demo only accepts the two built-in dummy targets.
+    </p>
+  </div>
+  <pre class="code"><code>curl -X POST http://localhost:3000/client/&lt;client-id&gt;/routes \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: auth_sec_&lt;your-api-key&gt;" \
+  -d '{"path":"orders","targeturl":"http://127.0.0.1:3001"}'</code></pre>
+  <p class="response-label">Response</p>
+  <pre class="code"><code>{
+  "success": true,
+  "message": "Route created successfully",
+  "client_route": true
+}</code></pre>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Tokens</p>
+    <h2>Exchange an API key for a JWT</h2>
+  </div>
+  <pre class="code"><code>curl -X POST http://localhost:3000/oauth/token \
+  -H "x-api-key: auth_sec_&lt;your-api-key&gt;"</code></pre>
+  <p class="response-label">Response</p>
+  <pre class="code"><code>{
+  "success": true,
+  "token": "&lt;jwt&gt;"
+}</code></pre>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Proxy</p>
+    <h2>Call the gateway</h2>
+    <p>
+      Register the route <code>orders</code> first, then request a path beneath
+      it. The JWT from the previous step goes in the authorization header.
+    </p>
+  </div>
+  <pre class="code"><code>curl http://localhost:3000/p/acme/orders/123 \
+  -H "Authorization: Bearer &lt;access-token&gt;"</code></pre>
+</section>
+
+<section class="section" id="subdomain-routing">
+  <div class="section-heading">
+    <p class="eyebrow">Routing modes</p>
+    <h2>Subdomain routing on Render</h2>
+    <p>
+      Subdomain mode needs wildcard DNS such as <code>*.example.com</code>
+      pointing at the service. On <code>*.onrender.com</code> you do not control
+      wildcard subdomains, so the hosted demo supports only path-prefix mode:
+    </p>
+  </div>
+  <pre class="code"><code># Works on the hosted demo
+curl http://localhost:3000/p/acme/orders/123 \
+  -H "Authorization: Bearer &lt;access-token&gt;"
+
+# Needs wildcard DNS for DOMAIN; not available on onrender.com
+curl http://acme.example.com:3000/orders/123 \
+  -H "Authorization: Bearer &lt;access-token&gt;"</code></pre>
+  <p>
+    The EJS pages live at <code>/</code>, <code>/try</code>, and
+    <code>/docs</code>. They are registered before the
+    <code>/p/:companyname/*route</code> handler and skipped for the service's
+    own hostname, so they never collide with the proxy or the vhost
+    middleware.
+  </p>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Errors</p>
+    <h2>Status codes</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Meaning</th>
+          <th>Typical cause</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="status ok">200</span></td>
+          <td>Success</td>
+          <td>Registration, route creation, token issued, or proxied response.</td>
+        </tr>
+        <tr>
+          <td><span class="status warn">400</span></td>
+          <td>Bad request</td>
+          <td>Missing fields, invalid target URL, or a disallowed demo target.</td>
+        </tr>
+        <tr>
+          <td><span class="status warn">401</span></td>
+          <td>Unauthorized</td>
+          <td>Missing or invalid JWT, missing route, or wrong <code>x-api-key</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="status warn">403</span></td>
+          <td>Forbidden target</td>
+          <td>The saved route does not point at an allowed upstream.</td>
+        </tr>
+        <tr>
+          <td><span class="status warn">404</span></td>
+          <td>Not found</td>
+          <td>Unknown client or route, or an unknown API path.</td>
+        </tr>
+        <tr>
+          <td><span class="status warn">429</span></td>
+          <td>Rate limited</td>
+          <td>More than 100 proxy requests per minute, or too many registrations.</td>
+        </tr>
+        <tr>
+          <td><span class="status bad">502</span></td>
+          <td>Bad gateway</td>
+          <td>The upstream server could not be reached.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Limits</p>
+    <h2>Rate limiting</h2>
+  </div>
+  <div class="grid two">
+    <article class="card">
+      <h3>Proxy calls</h3>
+      <p>
+        <strong>100 requests per minute</strong> per client route. Counters live
+        in Redis and reset after 60 seconds.
+      </p>
+    </article>
+    <article class="card">
+      <h3>Client registration</h3>
+      <p>
+        <strong>5 registrations per 15 minutes</strong> per IP address. A
+        <code>429</code> includes a <code>Retry-After</code> header.
+      </p>
+    </article>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Security</p>
+    <h2>Public demo safeguards</h2>
+  </div>
+  <ul class="check-list">
+    <li>Demo mode only accepts the two built-in dummy backend target URLs.</li>
+    <li>
+      Route creation requires the API key belonging to the specified client.
+    </li>
+    <li>
+      With demo mode disabled, target URLs are checked against private,
+      loopback, link-local, and reserved address ranges before they are saved.
+    </li>
+    <li>
+      The proxy re-checks the saved target on every request, so old database
+      rows cannot bypass the allowlist.
+    </li>
+  </ul>
+</section>
+
+<%- include("partials/footer") %>

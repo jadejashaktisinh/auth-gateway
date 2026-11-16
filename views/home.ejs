@@ -1,0 +1,172 @@
+<%- include("partials/header") %>
+
+<section class="hero">
+  <p class="eyebrow">Portfolio project</p>
+  <h1>An authenticated API gateway with dynamic upstream routing.</h1>
+  <p class="lede">
+    Register clients, map client paths to upstream services, exchange API keys
+    for short-lived JWTs, and proxy requests with Redis-backed rate limiting
+    and PostgreSQL request logging.
+  </p>
+  <div class="actions">
+    <a class="button" href="/try">Try the live flow</a>
+    <a class="button secondary" href="/docs">Read the API docs</a>
+  </div>
+  <div class="wake-note">
+    <span class="pulse" aria-hidden="true"></span>
+    <p>
+      <strong>Hosted on Render's free tier.</strong>
+      If the page took a while to load, that was a cold start. The first request
+      after a quiet period can take roughly 30 seconds.
+    </p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Architecture</p>
+    <h2>One gateway in front of many upstreams.</h2>
+    <p>
+      A client owns a company name, an API key, and one or more routes. Each
+      route maps a path prefix to an upstream <code>target_url</code>.
+    </p>
+  </div>
+  <pre class="diagram">                        ┌─────────────────────┐
+Client request ────────▶│     auth-service    │
+  (Bearer JWT)          │                     │
+                        │  vhost / /p/:company│
+                        │         │           │
+                        │  ProxyMiddleware    │
+                        │  - resolve client   │
+                        │  - verify JWT       │
+                        │  - rate limit       │
+                        │  - log request      │
+                        │         │           │
+                        └─────────┼───────────┘
+                                  ▼
+                         Upstream service
+                         (registered target_url)</pre>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Request flow</p>
+    <h2>What happens on every proxied call.</h2>
+  </div>
+  <ol class="flow">
+    <li>
+      <span class="step-number">1</span>
+      <div>
+        <h3>Resolve the client</h3>
+        <p>
+          The company name comes from the subdomain or from the
+          <code>/p/:companyname</code> path parameter.
+        </p>
+      </div>
+    </li>
+    <li>
+      <span class="step-number">2</span>
+      <div>
+        <h3>Find the route</h3>
+        <p>
+          The first path segment is matched against the client's registered
+          routes, which supplies the upstream <code>target_url</code>.
+        </p>
+      </div>
+    </li>
+    <li>
+      <span class="step-number">3</span>
+      <div>
+        <h3>Verify the JWT</h3>
+        <p>
+          The <code>Authorization: Bearer</code> token is checked against the
+          service secret. Tokens expire after 15 minutes.
+        </p>
+      </div>
+    </li>
+    <li>
+      <span class="step-number">4</span>
+      <div>
+        <h3>Apply the rate limit</h3>
+        <p>
+          Redis keeps a 60-second counter per client route. Requests over 100
+          per minute receive a <code>429</code>.
+        </p>
+      </div>
+    </li>
+    <li>
+      <span class="step-number">5</span>
+      <div>
+        <h3>Proxy the request</h3>
+        <p>
+          The remaining path is appended to the upstream target and the request
+          is forwarded with <code>http-proxy-middleware</code>.
+        </p>
+      </div>
+    </li>
+    <li>
+      <span class="step-number">6</span>
+      <div>
+        <h3>Log the result</h3>
+        <p>
+          Method, route, upstream, status, and error details are written to
+          PostgreSQL in the <code>proxy_logs</code> table.
+        </p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section class="section">
+  <div class="section-heading">
+    <p class="eyebrow">Built in</p>
+    <h2>Small service, real gateway behavior.</h2>
+  </div>
+  <div class="grid cards">
+    <article class="card">
+      <h3>Client registration</h3>
+      <p>Each client gets a generated <code>auth_sec_...</code> API key.</p>
+    </article>
+    <article class="card">
+      <h3>Short-lived JWTs</h3>
+      <p>API keys are exchanged for 15-minute access tokens.</p>
+    </article>
+    <article class="card">
+      <h3>Path and subdomain routing</h3>
+      <p>
+        Use <code>/p/acme/orders/123</code> or, with wildcard DNS,
+        <code>acme.example.com/orders/123</code>.
+      </p>
+    </article>
+    <article class="card">
+      <h3>Redis rate limiting</h3>
+      <p>100 requests per minute per client route, shared through Redis.</p>
+    </article>
+    <article class="card">
+      <h3>Request logs</h3>
+      <p>Every proxy call and upstream failure is recorded in PostgreSQL.</p>
+    </article>
+    <article class="card">
+      <h3>Demo-safe target allowlist</h3>
+      <p>
+        The public demo only proxies to its two built-in dummy backends. Route
+        creation requires the client's API key.
+      </p>
+    </article>
+  </div>
+</section>
+
+<section class="callout">
+  <div>
+    <p class="eyebrow">Hosted demo note</p>
+    <h2>Subdomain routing needs wildcard DNS.</h2>
+    <p>
+      <code>*.onrender.com</code> wildcard subdomains are not available, so the
+      live demo uses path-prefix mode only. Subdomain routing still works when
+      you control the DNS for <code>DOMAIN</code>.
+    </p>
+  </div>
+  <a class="button secondary" href="/docs#subdomain-routing">Read the caveat</a>
+</section>
+
+<%- include("partials/footer") %>

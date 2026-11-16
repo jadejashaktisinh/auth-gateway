@@ -1,9 +1,8 @@
 import "dotenv/config";
 import { db } from "../db/db.js";
-import { client_routes, clients, proxy_logs } from "../db/schema/schema.js";
+import { client_routes, clients } from "../db/schema/schema.js";
 import { and, eq, like } from "drizzle-orm/pg-core/expressions";
 import jwt from "jsonwebtoken";
-import { IncomingMessage, ServerResponse } from "http";
 import redisClient from "../config/redis.js";
 import type { ProxyRequest, ProxyLog } from "../types/proxy.types.js";
 import type { Request, Response, NextFunction } from "express";
@@ -14,6 +13,7 @@ import {
   normalizeRoute,
   rejectRequest,
 } from "../utils/proxy/proxy.utils.js";
+import { isTargetAllowedForProxy } from "../utils/security/target-url.js";
 
 export async function ProxyMiddleware(
   req: Request,
@@ -24,7 +24,7 @@ export async function ProxyMiddleware(
   const token = extractToken(req);
   const extracted = extractCompany(expressReq);
 
-  let route = normalizeRoute(expressReq.params.route);
+  const route = normalizeRoute(expressReq.params.route);
 
   if (!route) {
     return await rejectRequest("Route Missing", "Route is required.", res, 401);
@@ -43,7 +43,7 @@ export async function ProxyMiddleware(
     );
   }
 
-  let log: ProxyLog = {
+  const log: ProxyLog = {
     client_id: row.clients.id,
     route: route,
     target_url: "",
@@ -67,11 +67,22 @@ export async function ProxyMiddleware(
   // Both exist — safe to use
   const targetUrl = row.client_routes.target_url;
   log.target_url = targetUrl;
+
+  if (!isTargetAllowedForProxy(targetUrl)) {
+    return await rejectRequest(
+      "Target Not Allowed",
+      "This demo only proxies to its built-in dummy backends.",
+      res,
+      403,
+      log,
+    );
+  }
+
   req.headers["targeturl"] = targetUrl;
   req.headers["x-client-id"] = row.clients.id;
   const rateLimitKey = `route:${extracted}:${route}`;
 
-  const requestRate = await rateLimiter(rateLimitKey, res);
+  const requestRate = await rateLimiter(rateLimitKey);
   console.log("requestRate => ", requestRate);
   if (!requestRate) {
     return await rejectRequest(
@@ -107,10 +118,10 @@ export async function ProxyMiddleware(
     await redisClient.incr(rateLimitKey);
     next();
     // Append the original request URL to the target URL
-  } catch (error: any) {
+  } catch (error) {
     return rejectRequest(
       "Invalid Token",
-      error.message || "The provided token is invalid.",
+      error instanceof Error ? error.message : "The provided token is invalid.",
       res,
       401,
     );
@@ -138,10 +149,7 @@ async function checkClientExists(companyName: string, route: string) {
   return row;
 }
 
-async function rateLimiter(
-  rateLimitKey: string,
-  res: ServerResponse<IncomingMessage>,
-) {
+async function rateLimiter(rateLimitKey: string) {
   const requestRate = await redisClient.get(rateLimitKey);
   if (requestRate && parseInt(requestRate) >= 100) {
     return false;

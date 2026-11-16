@@ -1,0 +1,435 @@
+<%- include("partials/header") %>
+
+<section class="page-heading">
+  <p class="eyebrow">Interactive demo</p>
+  <h1>Register, route, authenticate, proxy.</h1>
+  <p class="lede">
+    Run the full flow against this deployment. Each step shows the matching
+    <code>curl</code> command so you can replay it from a terminal.
+  </p>
+  <div class="wake-note compact">
+    <span class="pulse" aria-hidden="true"></span>
+    <p>
+      <strong>First request after a quiet period can take ~30s.</strong>
+      The service runs on Render's free tier.
+    </p>
+  </div>
+  <% if (demoMode) { %>
+  <div class="note success-note">
+    <strong>Demo safety is on.</strong>
+    Routes can only target the built-in Orders and Inventory dummy backends.
+  </div>
+  <% } else { %>
+  <div class="note warning-note">
+    <strong>Demo mode is off.</strong>
+    Target URLs are validated against private and reserved address ranges, but
+    this page is intended for the built-in allowlist demo.
+  </div>
+  <% } %>
+</section>
+
+<section class="steps">
+  <article class="step-card" id="step-register">
+    <div class="step-head">
+      <span class="step-number">1</span>
+      <div>
+        <h2>Register a client</h2>
+        <p>Creates a client and returns its ID and API key.</p>
+      </div>
+    </div>
+    <form class="stack" data-form="register">
+      <label>
+        Company name
+        <input
+          name="companyName"
+          value="<%= suggestedCompanyName %>"
+          minlength="2"
+          maxlength="64"
+          pattern="[A-Za-z0-9_-]+"
+          autocomplete="off"
+          required
+        />
+      </label>
+      <button class="button" type="submit">Register client</button>
+    </form>
+    <div class="curl-block">
+      <span class="curl-label">curl</span>
+      <pre><code data-curl="register"></code></pre>
+    </div>
+    <div class="result" id="result-register" hidden>
+      <div class="result-head">
+        <span>Response</span>
+        <span class="status" data-status></span>
+      </div>
+      <pre><code data-body></code></pre>
+    </div>
+  </article>
+
+  <article class="step-card" id="step-route">
+    <div class="step-head">
+      <span class="step-number">2</span>
+      <div>
+        <h2>Add a route</h2>
+        <p>Maps a path prefix to one of the built-in dummy backends.</p>
+      </div>
+    </div>
+    <form class="stack" data-form="route">
+      <label>
+        Demo target
+        <select name="target">
+          <% demoTargets.forEach((target, index) => { %>
+          <option
+            value="<%= target.url %>"
+            data-path="<%= target.samplePath %>"
+            <%= index === 0 ? "selected" : "" %>
+          >
+            <%= target.label %> — <%= target.url %>
+          </option>
+          <% }) %>
+        </select>
+      </label>
+      <p class="hint" id="target-description"><%= demoTargets[0].description %></p>
+      <label>
+        Route path
+        <input
+          name="path"
+          value="<%= demoTargets[0].samplePath %>"
+          minlength="1"
+          maxlength="64"
+          pattern="[A-Za-z0-9_/-]+"
+          autocomplete="off"
+          required
+        />
+      </label>
+      <p class="hint">
+        Use the path prefix only, for example <code>orders</code>. The demo call
+        appends <code>/123</code>.
+      </p>
+      <button class="button" type="submit" data-button="route" disabled>
+        Add route
+      </button>
+    </form>
+    <div class="curl-block">
+      <span class="curl-label">curl</span>
+      <pre><code data-curl="route"></code></pre>
+    </div>
+    <div class="result" id="result-route" hidden>
+      <div class="result-head">
+        <span>Response</span>
+        <span class="status" data-status></span>
+      </div>
+      <pre><code data-body></code></pre>
+    </div>
+  </article>
+
+  <article class="step-card" id="step-token">
+    <div class="step-head">
+      <span class="step-number">3</span>
+      <div>
+        <h2>Get an access token</h2>
+        <p>Exchanges the API key for a JWT valid for 15 minutes.</p>
+      </div>
+    </div>
+    <form class="stack" data-form="token">
+      <button class="button" type="submit" data-button="token" disabled>
+        Request token
+      </button>
+    </form>
+    <div class="curl-block">
+      <span class="curl-label">curl</span>
+      <pre><code data-curl="token"></code></pre>
+    </div>
+    <div class="result" id="result-token" hidden>
+      <div class="result-head">
+        <span>Response</span>
+        <span class="status" data-status></span>
+      </div>
+      <pre><code data-body></code></pre>
+    </div>
+  </article>
+
+  <article class="step-card" id="step-proxy">
+    <div class="step-head">
+      <span class="step-number">4</span>
+      <div>
+        <h2>Call the proxy</h2>
+        <p>Uses the path-prefix route and the bearer token from step 3.</p>
+      </div>
+    </div>
+    <form class="stack" data-form="proxy">
+      <p class="proxy-url">
+        <span class="curl-label">GET</span>
+        <code id="proxy-url"></code>
+      </p>
+      <button class="button" type="submit" data-button="proxy" disabled>
+        Call proxied endpoint
+      </button>
+    </form>
+    <div class="curl-block">
+      <span class="curl-label">curl</span>
+      <pre><code data-curl="proxy"></code></pre>
+    </div>
+    <div class="result" id="result-proxy" hidden>
+      <div class="result-head">
+        <span>Response</span>
+        <span class="status" data-status></span>
+      </div>
+      <pre><code data-body></code></pre>
+    </div>
+  </article>
+</section>
+
+<script id="demo-targets" type="application/json"><%- JSON.stringify(demoTargets).replace(/</g, "\\u003c") %></script>
+<script>
+  (() => {
+    const targets = JSON.parse(
+      document.getElementById("demo-targets").textContent
+    );
+    const origin = window.location.origin;
+    const state = {
+      companyName: "",
+      clientId: "",
+      apiKey: "",
+      targetUrl: targets[0].url,
+      routePath: targets[0].samplePath,
+      routeCreated: false,
+      token: "",
+    };
+
+    const registerForm = document.querySelector('[data-form="register"]');
+    const routeForm = document.querySelector('[data-form="route"]');
+    const tokenForm = document.querySelector('[data-form="token"]');
+    const proxyForm = document.querySelector('[data-form="proxy"]');
+    const companyInput = registerForm.elements.companyName;
+    const targetSelect = routeForm.elements.target;
+    const pathInput = routeForm.elements.path;
+    const targetDescription = document.getElementById("target-description");
+    const proxyUrl = document.getElementById("proxy-url");
+    const routeButton = document.querySelector('[data-button="route"]');
+    const tokenButton = document.querySelector('[data-button="token"]');
+    const proxyButton = document.querySelector('[data-button="proxy"]');
+
+    state.companyName = companyInput.value.trim();
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, options);
+      const text = await response.text();
+      let body = text;
+
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        body = text;
+      }
+
+      if (!response.ok) {
+        const error = new Error(
+          (body && body.message) || "Request failed with " + response.status
+        );
+        error.status = response.status;
+        error.body = body;
+        throw error;
+      }
+
+      return { status: response.status, body };
+    }
+
+    function showResult(step, status, body, ok) {
+      const result = document.getElementById("result-" + step);
+      const badge = result.querySelector("[data-status]");
+      const output = result.querySelector("[data-body]");
+
+      result.hidden = false;
+      badge.textContent = String(status);
+      badge.className = "status " + (ok ? "ok" : "bad");
+      output.textContent =
+        typeof body === "string" ? body : JSON.stringify(body, null, 2);
+    }
+
+    function routeSegments() {
+      return state.routePath
+        .replace(/^\/+|\/+$/g, "")
+        .split("/")
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join("/");
+    }
+
+    function proxyPath() {
+      return "/p/" + encodeURIComponent(state.companyName) + "/" + routeSegments() + "/123";
+    }
+
+    function updateCurls() {
+      const company = state.companyName || "acme";
+      const clientId = state.clientId || "<client-id>";
+      const apiKey = state.apiKey || "<api-key>";
+      const token = state.token || "<access-token>";
+      const path = state.routePath || "orders";
+
+      document.querySelector('[data-curl="register"]').textContent =
+        "curl -X POST " + origin + "/client/register \\\n" +
+        '  -H "Content-Type: application/json" \\\n' +
+        "  -d '{\"companyName\":\"" + company + "\"}'";
+
+      document.querySelector('[data-curl="route"]').textContent =
+        "curl -X POST " + origin + "/client/" + clientId + "/routes \\\n" +
+        '  -H "Content-Type: application/json" \\\n' +
+        '  -H "x-api-key: ' + apiKey + '" \\\n' +
+        "  -d '{\"path\":\"" + path + "\",\"targeturl\":\"" + state.targetUrl + "\"}'";
+
+      document.querySelector('[data-curl="token"]').textContent =
+        "curl -X POST " + origin + "/oauth/token \\\n" +
+        '  -H "x-api-key: ' + apiKey + '"';
+
+      proxyUrl.textContent = proxyPath();
+
+      document.querySelector('[data-curl="proxy"]').textContent =
+        "curl " + origin + proxyPath() + " \\\n" +
+        '  -H "Authorization: Bearer ' + token + '"';
+    }
+
+    function syncButtons() {
+      routeButton.disabled = !state.clientId;
+      tokenButton.disabled = !state.clientId;
+      proxyButton.disabled = !(state.routeCreated && state.token);
+    }
+
+    registerForm.addEventListener("input", () => {
+      state.companyName = companyInput.value.trim();
+      updateCurls();
+    });
+
+    registerForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const companyName = companyInput.value.trim();
+
+      try {
+        const { status, body } = await api("/client/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyName }),
+        });
+        const client = Array.isArray(body.client) ? body.client[0] : body.client;
+
+        if (!client) {
+          throw new Error("Registration response did not include a client.");
+        }
+
+        state.companyName = client.companyName;
+        state.clientId = client.id;
+        state.apiKey = client.apiKey;
+        state.routeCreated = false;
+        state.token = "";
+        showResult("register", status, body, true);
+        syncButtons();
+        updateCurls();
+      } catch (error) {
+        showResult(
+          "register",
+          error.status || "error",
+          error.body || { message: error.message },
+          false
+        );
+      }
+    });
+
+    targetSelect.addEventListener("change", () => {
+      const option = targetSelect.selectedOptions[0];
+      const target = targets.find((item) => item.url === option.value);
+
+      state.targetUrl = option.value;
+      state.routePath = option.dataset.path || state.routePath;
+      state.routeCreated = false;
+      pathInput.value = state.routePath;
+      targetDescription.textContent = target ? target.description : "";
+      syncButtons();
+      updateCurls();
+    });
+
+    pathInput.addEventListener("input", () => {
+      state.routePath = pathInput.value.trim();
+      state.routeCreated = false;
+      syncButtons();
+      updateCurls();
+    });
+
+    routeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      try {
+        const { status, body } = await api(
+          "/client/" + encodeURIComponent(state.clientId) + "/routes",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": state.apiKey,
+            },
+            body: JSON.stringify({
+              path: state.routePath,
+              targeturl: state.targetUrl,
+            }),
+          }
+        );
+
+        state.routeCreated = true;
+        showResult("route", status, body, true);
+        syncButtons();
+      } catch (error) {
+        showResult(
+          "route",
+          error.status || "error",
+          error.body || { message: error.message },
+          false
+        );
+      }
+    });
+
+    tokenForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      try {
+        const { status, body } = await api("/oauth/token", {
+          method: "POST",
+          headers: { "x-api-key": state.apiKey },
+        });
+
+        state.token = body.token;
+        showResult("token", status, body, true);
+        syncButtons();
+        updateCurls();
+      } catch (error) {
+        showResult(
+          "token",
+          error.status || "error",
+          error.body || { message: error.message },
+          false
+        );
+      }
+    });
+
+    proxyForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      try {
+        const { status, body } = await api(proxyPath(), {
+          headers: { Authorization: "Bearer " + state.token },
+        });
+
+        showResult("proxy", status, body, true);
+      } catch (error) {
+        showResult(
+          "proxy",
+          error.status || "error",
+          error.body || { message: error.message },
+          false
+        );
+      }
+    });
+
+    updateCurls();
+    syncButtons();
+  })();
+</script>
+
+<%- include("partials/footer") %>

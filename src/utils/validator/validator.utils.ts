@@ -1,16 +1,16 @@
 import type { ValidatorSchema } from "../../types/validator.types.js";
 
 export function validator<T>(validtorSchemas: ValidatorSchema<T>[]) {
-  let finalResult: { valid: boolean; messages: string[] } = {
+  const finalResult: { valid: boolean; messages: string[] } = {
     valid: true,
     messages: [],
   };
-  console.log(validtorSchemas);
-  for (let validtorSchema of validtorSchemas) {
+
+  for (const validtorSchema of validtorSchemas) {
     const validate = validateSingle(validtorSchema);
     if (!validate.valid) {
-      ((finalResult.valid = false),
-        finalResult.messages.push(validate.message));
+      finalResult.valid = false;
+      finalResult.messages.push(validate.message);
     }
   }
 

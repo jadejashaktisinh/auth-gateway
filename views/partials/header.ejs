@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%= title %></title>
+    <meta
+      name="description"
+      content="An authenticated API gateway with dynamic upstream routing, JWTs, rate limiting, and request logging."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="/">
+          <span class="brand-mark">a</span>
+          <span>auth-service</span>
+        </a>
+        <nav class="nav" aria-label="Main navigation">
+          <a href="/" class="<%= current === 'home' ? 'active' : '' %>">Home</a>
+          <a href="/try" class="<%= current === 'try' ? 'active' : '' %>">Try it</a>
+          <a href="/docs" class="<%= current === 'docs' ? 'active' : '' %>">API docs</a>
+          <a class="nav-github" href="/health">Health</a>
+        </nav>
+      </div>
+    </header>
+    <main class="page">
